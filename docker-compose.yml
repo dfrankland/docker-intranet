@@ -1,0 +1,45 @@
+version: '2'
+services:
+  nginx:
+    image: nginx
+    links:
+      - php
+    ports:
+      - '80:80'
+    volumes:
+      - ./code:/code
+    command: |
+      bash -c '
+        HTTP_USERNAME=$HTTP_USERNAME HTTP_PASSWORD=$HTTP_PASSWORD /code/create-password.sh;
+        echo -e "
+          events { worker_connections 1024; }
+          http {
+            server {
+              listen 80;
+              index index.php index.html;
+              root /code/home;
+
+              location ~ \.php\$$ {
+                auth_basic \"Restricted Content\";
+                auth_basic_user_file .htpasswd;
+                try_files \$$uri \$$uri/ /index.php\$$is_args\$$args;
+                fastcgi_split_path_info ^(.+\.php)(/.+)\$$;
+                fastcgi_pass php:9000;
+                fastcgi_index index.php;
+                include fastcgi_params;
+                fastcgi_param SCRIPT_FILENAME \$$document_root\$$fastcgi_script_name;
+                fastcgi_param PATH_INFO \$$fastcgi_path_info;
+              }
+            }
+          }
+        " > /etc/nginx/nginx.conf;
+        nginx -g "daemon off;";
+      '
+  php:
+    image: php:fpm
+    entrypoint:
+      - php-fpm
+    expose:
+      - '9000'
+    volumes:
+      - ./code:/code
